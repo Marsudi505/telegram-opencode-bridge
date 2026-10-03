@@ -122,3 +122,21 @@ test('runOpencode memastikan proses cucu ikut mati, bukan hanya proses utama', a
   await new Promise((r) => setTimeout(r, 250));
   assert.equal(isAlive(childPid), false, 'proses cucu harus ikut mati setelah group kill');
 });
+
+function makeStubborn() {
+  const dir = mkdtempSync(join(tmpdir(), 'bridge-stubborn-'));
+  const script = join(dir, 'stubborn.sh');
+  writeFileSync(script, "#!/bin/sh\ntrap '' INT\nsleep 60\n");
+  chmodSync(script, 0o755);
+  return script;
+}
+
+test('runOpencode menaikkan SIGINT ke SIGKILL kalau proses mengabaikannya', async () => {
+  const promise = runOpencode({
+    prompt: 'hi',
+    config: makeConfig({ opencodeBin: makeStubborn(), aiTimeoutMs: 200 }),
+  });
+  const result = await promise;
+  assert.equal(result.timedOut, true);
+  assert.equal(result.signal, 'SIGKILL');
+});

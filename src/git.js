@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 
 const MAX_CAPTURE_BYTES = 5 * 1024 * 1024;
+const SIGKILL_GRACE_MS = 5000;
 
 const SENSITIVE_BASENAMES = new Set([
   'id_rsa',
@@ -75,16 +76,35 @@ export function runOpencode({ prompt, config, sessionId, signal }) {
     let timedOut = false;
     let settled = false;
 
+    let killTimer = null;
+
+    const forceKill = () => {
+      try {
+        process.kill(-child.pid, 'SIGKILL');
+      } catch {
+        try {
+          child.kill('SIGKILL');
+        } catch {
+          /* proses sudah selesai */
+        }
+      }
+    };
+
     const killTree = () => {
+      let signalled = true;
       try {
         process.kill(-child.pid, 'SIGINT');
       } catch {
         try {
           child.kill('SIGINT');
         } catch {
-          /* proses sudah selesai */
+          signalled = false;
         }
       }
+      if (!signalled) return;
+      clearTimeout(killTimer);
+      killTimer = setTimeout(forceKill, SIGKILL_GRACE_MS);
+      killTimer.unref?.();
     };
 
     const timer = setTimeout(() => {
@@ -102,6 +122,7 @@ export function runOpencode({ prompt, config, sessionId, signal }) {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      clearTimeout(killTimer);
       if (signal) signal.removeEventListener('abort', onAbort);
       const { answer, sessionId: nextSessionId } = extractAnswer(stdout);
       resolve({ code, signal: sig, stdout, stderr, timedOut, answer, sessionId: nextSessionId });
