@@ -1,0 +1,20 @@
+{
+  "name": "telegram-opencode-bridge",
+  "version": "1.0.0",
+  "description": "Bot Telegram remote control opencode-cli dengan auto-commit dan push ke GitHub",
+  "type": "module",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18.17.0"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "telegraf": "^4.16.3"
+  },
+  "license": "MIT"
+}
