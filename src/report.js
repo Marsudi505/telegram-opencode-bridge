@@ -11,7 +11,7 @@ export function splitText(text, limit = 4000) {
   return parts;
 }
 
-export function formatReport({ answer, changedFiles, sha, branch, sessionId }) {
+export function formatReport({ answer, changedFiles, sha, branch, sessionId, bypassedSensitiveFiles }) {
   const lines = [];
   lines.push(`✅ Selesai — commit ${sha}`, '');
   lines.push('Jawaban AI:');
@@ -26,6 +26,11 @@ export function formatReport({ answer, changedFiles, sha, branch, sessionId }) {
     lines.push(`  +${hidden} file lain tidak ditampilkan`);
   }
   lines.push('');
+  if (bypassedSensitiveFiles?.length) {
+    lines.push('⚠️ Screening file sensitif DILEWATI karena --force:');
+    for (const file of bypassedSensitiveFiles) lines.push(`  ${file}`);
+    lines.push('');
+  }
   lines.push(`Branch: ${branch} → origin/${branch}`);
   if (sessionId) lines.push(`Sesi: ${sessionId} (aktif untuk /ai berikutnya)`);
   return lines.join('\n');

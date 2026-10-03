@@ -85,3 +85,30 @@ test('runAI melepas busy lock meski ada error tak tertangani setelah opencode', 
   assert.ok(threw, 'test harus memicu error tak tertangani');
   assert.equal(currentRun.active, false, 'busy lock HARUS lepas meski ada throw');
 });
+
+test('parseCommand mengaktifkan force hanya di posisi pertama', async () => {
+  const { parseCommand } = await import('../index.js');
+  assert.deepEqual(parseCommand('/ai --force tambahin endpoint'), {
+    prompt: 'tambahin endpoint',
+    force: true,
+  });
+  assert.deepEqual(parseCommand('/ai@bot --force halo'), { prompt: 'halo', force: true });
+  assert.deepEqual(parseCommand('/ai   --force   rapikan'), { prompt: 'rapikan', force: true });
+});
+
+test('parseCommand tidak salah tangkap --force di dalam prompt sah', async () => {
+  const { parseCommand } = await import('../index.js');
+  assert.deepEqual(parseCommand('/ai install dengan npm --force'), {
+    prompt: 'install dengan npm --force',
+    force: false,
+  });
+  assert.deepEqual(parseCommand('/ai tambahkan opsi --force di parser'), {
+    prompt: 'tambahkan opsi --force di parser',
+    force: false,
+  });
+});
+
+test('parseCommand menolak --force sendirian tanpa prompt', async () => {
+  const { parseCommand } = await import('../index.js');
+  assert.deepEqual(parseCommand('/ai --force'), { prompt: '', force: true });
+});

@@ -7,6 +7,7 @@ const DEFAULTS = {
   COMMIT_PREFIX: 'Update via AI',
   COMMIT_SUBJECT: 'update via bot Telegram',
   MAX_OUTPUT_CHARS: '3500',
+  GIT_TIMEOUT_MS: '120000',
 };
 
 export function isAllowed(userId, allowedUserIds) {
@@ -35,5 +36,6 @@ export function loadConfig(env = process.env) {
     commitPrefix: env.COMMIT_PREFIX?.trim() || DEFAULTS.COMMIT_PREFIX,
     commitSubject: env.COMMIT_SUBJECT?.trim() || DEFAULTS.COMMIT_SUBJECT,
     maxOutputChars: Number(env.MAX_OUTPUT_CHARS) || Number(DEFAULTS.MAX_OUTPUT_CHARS),
+    gitTimeoutMs: Number(env.GIT_TIMEOUT_MS) || Number(DEFAULTS.GIT_TIMEOUT_MS),
   };
 }

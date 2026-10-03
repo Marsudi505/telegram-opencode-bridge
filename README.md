@@ -43,7 +43,7 @@ Menjadikan mesin dev bisa dikendalikan dari Telegram. Satu perintah `/ai` menjal
 | `index.js` | ✅ Selesai |
 | `data/.gitkeep` | ✅ Selesai |
 
-## ⚙️ Environment Variables (11)
+## ⚙️ Environment Variables (13)
 
 | Var | Wajib | Default |
 |---|---|---|
@@ -57,13 +57,16 @@ Menjadikan mesin dev bisa dikendalikan dari Telegram. Satu perintah `/ai` menjal
 | `PROGRESS_EVERY_MS` | — | `15000` |
 | `GIT_BRANCH` | — | *(kosong = auto-deteksi)* |
 | `COMMIT_PREFIX` | — | `Update via AI` |
+| `COMMIT_SUBJECT` | — | `update via bot Telegram` |
 | `MAX_OUTPUT_CHARS` | — | `3500` |
+| `GIT_TIMEOUT_MS` | — | `120000` (2 mnt, per langkah git) |
 
 ## 🤖 Command
 
 | Command | Fungsi |
 |---|---|
 | `/ai <prompt>` | Jalankan pipeline opencode + auto-commit + push |
+| `/ai --force <prompt>` | Sama seperti di atas, tapi **melewati screening file sensitif** |
 | `/cancel` | Batalkan proses yang sedang jalan |
 | `/status` | Status idle/busy + durasi |
 | `/newsession` | Buang sesi tersimpan, mulai context fresh |
@@ -148,6 +151,20 @@ npm start
 | `/newsession` | Buang context sesi, `/ai` berikutnya mulai dari nol |
 
 Hanya user di `ALLOWED_USER_IDS` yang bisa memakai bot; selain itu ditolak.
+
+### Flag `--force`
+
+`--force` hanya dikenali **di posisi pertama** setelah `/ai`. Bot melepaskannya dari prompt sebelum meneruskan ke opencode.
+
+```
+/ai --force tambahin src/credentials-page.jsx
+```
+
+Kalau `--force` muncul di tempat lain, itu **bukan** flag bot dan diteruskan apa adanya ke opencode — `/ai install dengan npm --force` tetap aman.
+
+Yang dilewati hanya screening file sensitif. Detached HEAD, branch tanpa upstream, dan push gagal tetap menolak, karena itu kondisi repo rusak, bukan false positive screening. Laporan hasil tetap mencantumkan file mana yang diskor despite bypass, dengan penanda `⚠️ Screening file sensitif DILEWATI karena --force`.
+
+`--force` hanya melewati *peringatan*, bukan autoresolusi: file tersebut tetap ikut di-*commit* dan di-*push*. Kalau itu memang credential asli, rotasi kredensial itu setelahnya — membatalkan commit tidak membatalkan apa yang sudah masuk riwayat git.
 
 ### Catatan keterbatasan
 

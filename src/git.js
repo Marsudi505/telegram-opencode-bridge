@@ -63,6 +63,36 @@ export function extractAnswer(stdout) {
   return { answer: answer.length > 0 ? answer : null, sessionId };
 }
 
+function createKiller(child) {
+  let killTimer = null;
+
+  const signal = (sig) => {
+    try {
+      process.kill(-child.pid, sig);
+      return true;
+    } catch {
+      try {
+        child.kill(sig);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+  };
+
+  return {
+    interrupt() {
+      if (!signal('SIGINT')) return;
+      clearTimeout(killTimer);
+      killTimer = setTimeout(() => signal('SIGKILL'), SIGKILL_GRACE_MS);
+      killTimer.unref?.();
+    },
+    clear() {
+      clearTimeout(killTimer);
+    },
+  };
+}
+
 export function runOpencode({ prompt, config, sessionId, signal }) {
   return new Promise((resolve) => {
     const child = spawn(config.opencodeBin, buildArgs(prompt, config, sessionId), {
@@ -76,36 +106,8 @@ export function runOpencode({ prompt, config, sessionId, signal }) {
     let timedOut = false;
     let settled = false;
 
-    let killTimer = null;
-
-    const forceKill = () => {
-      try {
-        process.kill(-child.pid, 'SIGKILL');
-      } catch {
-        try {
-          child.kill('SIGKILL');
-        } catch {
-          /* proses sudah selesai */
-        }
-      }
-    };
-
-    const killTree = () => {
-      let signalled = true;
-      try {
-        process.kill(-child.pid, 'SIGINT');
-      } catch {
-        try {
-          child.kill('SIGINT');
-        } catch {
-          signalled = false;
-        }
-      }
-      if (!signalled) return;
-      clearTimeout(killTimer);
-      killTimer = setTimeout(forceKill, SIGKILL_GRACE_MS);
-      killTimer.unref?.();
-    };
+    const killer = createKiller(child);
+    const killTree = () => killer.interrupt();
 
     const timer = setTimeout(() => {
       timedOut = true;
@@ -122,7 +124,7 @@ export function runOpencode({ prompt, config, sessionId, signal }) {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      clearTimeout(killTimer);
+      killer.clear();
       if (signal) signal.removeEventListener('abort', onAbort);
       const { answer, sessionId: nextSessionId } = extractAnswer(stdout);
       resolve({ code, signal: sig, stdout, stderr, timedOut, answer, sessionId: nextSessionId });
@@ -144,17 +146,37 @@ export function runOpencode({ prompt, config, sessionId, signal }) {
 
 export function git(args, config) {
   return new Promise((resolve) => {
-    const child = spawn('git', args, { cwd: config.repoPath, shell: false });
+    const child = spawn('git', args, { cwd: config.repoPath, shell: false, detached: true });
     let stdout = '';
     let stderr = '';
+    let timedOut = false;
+    let settled = false;
+
+    const killer = createKiller(child);
+    const timer = setTimeout(() => {
+      timedOut = true;
+      killer.interrupt();
+    }, config.gitTimeoutMs ?? 120000);
+
+    const finish = (code, sig) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      killer.clear();
+      resolve({ code, signal: sig, stdout, stderr, timedOut });
+    };
+
     child.stdout.on('data', (chunk) => {
       stdout += chunk;
     });
     child.stderr.on('data', (chunk) => {
       stderr += chunk;
     });
-    child.on('error', (error) => resolve({ code: -1, stdout, stderr: error.message }));
-    child.on('close', (code) => resolve({ code, stdout, stderr }));
+    child.on('error', (error) => {
+      stderr += `\n${error.message}`;
+      finish(-1, null);
+    });
+    child.on('close', (code, sig) => finish(code, sig));
   });
 }
 
@@ -174,7 +196,7 @@ async function shortSha(config) {
   return firstLine(result.stdout).trim();
 }
 
-export async function pipelineGit({ config, isCancelled }) {
+export async function pipelineGit({ config, isCancelled, force = false }) {
   const abort = (code, message, extra = {}) => ({
     ok: false,
     code,
@@ -182,17 +204,29 @@ export async function pipelineGit({ config, isCancelled }) {
     files: extra.files ?? [],
     branch: extra.branch ?? null,
     sha: extra.sha ?? null,
+    bypassedSensitiveFiles: extra.bypassedSensitiveFiles ?? [],
   });
+
+  const timeoutHint = `Fase git melewati batas waktu ${config.gitTimeoutMs} ms dan prosesnya dihentikan.`;
+
+  const timeoutAbort = (stage, extra = {}) => {
+    const message = extra.afterCommit
+      ? `${timeoutHint}\nTahap: ${stage}\nCommit sudah dibuat, tapi push belum selesai. Jalankan manual: git -C ${config.repoPath} push origin ${extra.branch}`
+      : `${timeoutHint}\nTahap: ${stage}\nTidak ada yang di-push.`;
+    return abort('git-timeout', message, extra);
+  };
 
   if (isCancelled()) return abort('cancelled', 'Dibatalkan sebelum git dimulai.');
 
   const status = await git(['status', '--porcelain'], config);
+  if (status.timedOut) return timeoutAbort('git status');
   const files = parsePorcelain(status.stdout);
   if (files.length === 0) {
     return abort('clean', 'Selesai, tapi AI tidak mengubah file apa pun. Tidak ada commit yang dibuat.');
   }
 
   const branchResult = await git(['rev-parse', '--abbrev-ref', 'HEAD'], config);
+  if (branchResult.timedOut) return timeoutAbort('deteksi branch', { files });
   if (branchResult.code !== 0) {
     return abort('detached', 'Gagal membaca branch git.', { files });
   }
@@ -205,18 +239,29 @@ export async function pipelineGit({ config, isCancelled }) {
   if (isCancelled()) return abort('cancelled', 'Dibatalkan sebelum staging.', { files, branch });
 
   const add = await git(['add', '-A'], config);
+  if (add.timedOut) {
+    await git(['reset', '-q'], config);
+    return timeoutAbort('git add', { files, branch });
+  }
   if (add.code !== 0) {
     return abort('add-failed', `git add gagal: ${firstLine(add.stderr)}`, { files, branch });
   }
 
   const staged = await git(['diff', '--cached', '--name-only'], config);
+  if (staged.timedOut) {
+    await git(['reset', '-q'], config);
+    return timeoutAbort('git diff --cached', { files, branch });
+  }
   const sensitive = screenSensitiveFiles(staged.stdout.split('\n').filter(Boolean));
-  if (sensitive.length > 0) {
+  let bypassedSensitiveFiles = [];
+  if (sensitive.length > 0 && force) {
+    bypassedSensitiveFiles = sensitive;
+  } else if (sensitive.length > 0) {
     await git(['reset', '-q'], config);
     return abort(
       'sensitive',
       `Push dibatalkan — file sensitif terdeteksi:\n${sensitive.map((file) => `  ${file}`).join('\n')}\n\nStaging dibatalkan (git reset). Tidak ada yang di-push. Perbaiki .gitignore lalu ulangi.`,
-      { files, branch },
+      { files, branch, bypassedSensitiveFiles },
     );
   }
 
@@ -227,6 +272,10 @@ export async function pipelineGit({ config, isCancelled }) {
 
   const subject = `${config.commitPrefix}: ${config.commitSubject ?? ''}`.trimEnd();
   const commit = await git(['commit', '-m', subject], config);
+  if (commit.timedOut) {
+    await git(['reset', '-q'], config);
+    return timeoutAbort('git commit', { files, branch });
+  }
   if (commit.code !== 0) {
     await git(['reset', '-q'], config);
     return abort('commit-failed', `git commit gagal: ${firstLine(commit.stderr)}`, { files, branch });
@@ -236,6 +285,10 @@ export async function pipelineGit({ config, isCancelled }) {
     ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'],
     config,
   );
+  if (upstream.timedOut) {
+    const sha = await shortSha(config);
+    return timeoutAbort('cek upstream', { files, branch, sha, afterCommit: true });
+  }
   if (upstream.code !== 0) {
     const sha = await shortSha(config);
     return abort(
@@ -256,6 +309,7 @@ export async function pipelineGit({ config, isCancelled }) {
 
   const push = await git(['push', 'origin', branch], config);
   const sha = await shortSha(config);
+  if (push.timedOut) return timeoutAbort('git push', { files, branch, sha, afterCommit: true });
   if (push.code !== 0) {
     return abort(
       'push-failed',
@@ -264,5 +318,13 @@ export async function pipelineGit({ config, isCancelled }) {
     );
   }
 
-  return { ok: true, code: 'pushed', message: `Berhasil push ke ${branch}`, files, branch, sha };
+  return {
+    ok: true,
+    code: 'pushed',
+    message: `Berhasil push ke ${branch}`,
+    files,
+    branch,
+    sha,
+    bypassedSensitiveFiles,
+  };
 }

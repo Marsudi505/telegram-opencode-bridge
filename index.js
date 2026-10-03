@@ -85,7 +85,16 @@ function stopProgress() {
   }
 }
 
-async function runAI(ctx, prompt) {
+export function parseCommand(text) {
+  const body = text.replace(/^\/ai(@\S+)?\s*/, '').trim();
+  if (body === '--force') return { prompt: '', force: true };
+  if (body.startsWith('--force')) {
+    return { prompt: body.slice('--force'.length).trim(), force: true };
+  }
+  return { prompt: body, force: false };
+}
+
+async function runAI(ctx, prompt, force = false) {
   const config = loadConfig();
   const previousSession = loadSession().sessionId;
 
@@ -95,7 +104,7 @@ async function runAI(ctx, prompt) {
   currentRun.controller = new AbortController();
 
   try {
-    return await runAIBody(ctx, prompt, config, previousSession);
+    return await runAIBody(ctx, prompt, config, previousSession, force);
   } finally {
     currentRun.active = false;
     currentRun.controller = null;
@@ -104,7 +113,7 @@ async function runAI(ctx, prompt) {
   }
 }
 
-async function runAIBody(ctx, prompt, config, previousSession) {
+async function runAIBody(ctx, prompt, config, previousSession, force) {
   let statusMessageId;
   try {
     const status = await ctx.reply('⏳ Memproses… opencode sedang menjalankan tugas.');
@@ -155,7 +164,7 @@ async function runAIBody(ctx, prompt, config, previousSession) {
 
   await updateStatus(ctx, `✅ opencode selesai dalam ${elapsed}. Menjalankan git…`);
 
-  const gitResult = await pipelineGit({ config, isCancelled: () => !currentRun.active });
+  const gitResult = await pipelineGit({ config, isCancelled: () => !currentRun.active, force });
 
   if (gitResult.ok) {
     await updateStatus(ctx, '✅ Berhasil push.');
@@ -167,6 +176,7 @@ async function runAIBody(ctx, prompt, config, previousSession) {
         sha: gitResult.sha,
         branch: gitResult.branch,
         sessionId: result.sessionId,
+        bypassedSensitiveFiles: gitResult.bypassedSensitiveFiles,
       }),
     );
   } else if (gitResult.code === 'clean') {
@@ -205,7 +215,7 @@ async function main() {
   });
 
   bot.command('ai', async (ctx) => {
-    const text = ctx.message.text.replace(/^\/ai(@\S+)?\s*/, '').trim();
+    const { prompt: text, force } = parseCommand(ctx.message.text);
     if (text.length === 0) {
       return sendChunked(ctx, 'Cara pakai: /ai <prompt>\nContoh: /ai tambahin endpoint users di src/server.js');
     }
@@ -213,7 +223,7 @@ async function main() {
       const elapsed = formatDuration(Date.now() - currentRun.startedAt);
       return sendChunked(ctx, `⏳ Masih ada proses lain yang jalan (sudah ${elapsed}).\nCoba lagi nanti, atau /cancel untuk membatalkan.`);
     }
-    return runAI(ctx, text);
+    return runAI(ctx, text, force);
   });
 
   bot.command('cancel', (ctx) => {

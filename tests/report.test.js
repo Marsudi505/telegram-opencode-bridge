@@ -74,3 +74,26 @@ test('formatReport menyebutkan jumlah file yang dipotong', () => {
   assert.doesNotMatch(report, /M src\/file25\.js/);
   assert.match(report, /\+5 file lain tidak ditampilkan/);
 });
+
+test('formatReport menyebut file yang diskor saat --force dipakai', () => {
+  const text = formatReport({
+    answer: 'selesai',
+    changedFiles: ['src/a.js', '.env'],
+    sha: 'abc1234',
+    branch: 'main',
+    bypassedSensitiveFiles: ['.env'],
+  });
+  assert.match(text, /DILEWATI karena --force/);
+  assert.match(text, /\.env/);
+});
+
+test('formatReport tidak menampilkan blok bypass saat kosong', () => {
+  const text = formatReport({
+    answer: 'selesai',
+    changedFiles: ['src/a.js'],
+    sha: 'abc1234',
+    branch: 'main',
+    bypassedSensitiveFiles: [],
+  });
+  assert.doesNotMatch(text, /DILEWATI/);
+});
