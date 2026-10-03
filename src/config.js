@@ -5,6 +5,7 @@ const DEFAULTS = {
   AI_TIMEOUT_MS: '1800000',
   PROGRESS_EVERY_MS: '15000',
   COMMIT_PREFIX: 'Update via AI',
+  COMMIT_SUBJECT: 'update via bot Telegram',
   MAX_OUTPUT_CHARS: '3500',
 };
 
@@ -32,6 +33,7 @@ export function loadConfig(env = process.env) {
     progressEveryMs: Number(env.PROGRESS_EVERY_MS) || Number(DEFAULTS.PROGRESS_EVERY_MS),
     gitBranch: env.GIT_BRANCH?.trim() || null,
     commitPrefix: env.COMMIT_PREFIX?.trim() || DEFAULTS.COMMIT_PREFIX,
+    commitSubject: env.COMMIT_SUBJECT?.trim() || DEFAULTS.COMMIT_SUBJECT,
     maxOutputChars: Number(env.MAX_OUTPUT_CHARS) || Number(DEFAULTS.MAX_OUTPUT_CHARS),
   };
 }

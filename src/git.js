@@ -204,7 +204,7 @@ export async function pipelineGit({ config, isCancelled }) {
     return abort('cancelled', 'Dibatalkan sebelum commit.', { files, branch });
   }
 
-  const subject = `${config.commitPrefix}: ${process.env.COMMIT_SUBJECT ?? ''}`.trimEnd();
+  const subject = `${config.commitPrefix}: ${config.commitSubject ?? ''}`.trimEnd();
   const commit = await git(['commit', '-m', subject], config);
   if (commit.code !== 0) {
     await git(['reset', '-q'], config);
