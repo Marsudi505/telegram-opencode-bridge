@@ -96,14 +96,14 @@ Menjadikan mesin dev bisa dikendalikan dari Telegram. Satu perintah `/ai` menjal
 | 7. Spec self-review | ✅ Selesai | Placeholder/kontradiksi/ambiguitas/scope — 11 perbaikan |
 | 8. Review dokumen oleh user | ✅ Selesai | Disetujui 2026-10-03 |
 | 9. Implementation plan (`writing-plans`) | ✅ Selesai | 6 task, 46 step, 37 test — `docs/superpowers/plans/2026-10-03-telegram-opencode-bridge.md` |
-| 10. Implementasi 6 task | 🔄 Berjalan | Task 1–5 selesai, **42/42 test hijau**. Task 6 (final review) menyusul |
+| 10. Implementasi 6 task | ✅ Selesai | **43/43 test hijau**, 6 commit, final review Task 6 selesai |
 | 11. Verifikasi manual di mesin target | ⬜ Belum | Butuh provider opencode aktif |
 
 ## ➡️ Timeline
 
-**Sedang di:** Step 10, Task 5 — entry point bot Telegraf selesai dan teruji.
+**Sedang di:** Step 11 — implementasi selesai, menunggu verifikasi manual di mesin target.
 
-**Aksi berikutnya:** Task 6 (final review seluruh branch), lalu verifikasi manual dari Telegram di mesin target.
+**Aksi berikutnya:** isi `.env` di mesin target dengan token yang sudah dirotasi, lalu verifikasi `/status` dan `/ai` dari Telegram. Lihat bagian 🚀 Cara Pakai.
 
 ## 📌 Temuan Verifikasi Lingkungan (2026-10-03)
 
