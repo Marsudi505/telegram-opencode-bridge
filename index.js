@@ -249,8 +249,12 @@ async function main() {
     console.error(`[bot] error tidak tertangani: ${error.message}`);
   });
 
+  const me = await bot.telegram.getMe();
+  console.log(
+    `Bot aktif sebagai @${me.username} (id ${me.id}). REPO_PATH=${config.repoPath}. Menunggu perintah.`,
+  );
+
   await bot.launch();
-  console.log('Bot aktif. Menunggu perintah.');
 }
 
 const isEntryPoint =
