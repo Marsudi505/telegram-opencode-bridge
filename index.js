@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Telegraf } from 'telegraf';
 import { loadConfig, isAllowed } from './src/config.js';
@@ -257,10 +257,12 @@ async function main() {
   await bot.launch();
 }
 
-const isEntryPoint =
-  process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
-
-if (isEntryPoint) {
+// Guard autostart berbasis env, bukan process.argv[1]. Process manager seperti
+// pm2 menjalankan "node <fork-script> milik mereka" lalu memuat modul ini di
+// dalamnya, sehingga argv[1] tidak pernah menunjuk ke berkas ini. Guard argv
+// membuat main() tidak pernah terpanggil di bawah pm2: proses tetap hidup,
+// exit 0, tanpa satu baris log pun.
+if (process.env.BRIDGE_NO_AUTOSTART !== '1') {
   main().catch((error) => {
     console.error(`Fatal: ${error.message}`);
     process.exit(1);

@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
+process.env.BRIDGE_NO_AUTOSTART = '1';
+
 function makeRepo() {
   const dir = mkdtempSync(join(tmpdir(), 'bridge-boot-'));
   execFileSync('git', ['init', '-q'], { cwd: dir });
