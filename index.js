@@ -57,7 +57,7 @@ async function sendChunked(ctx, text, extra = {}) {
 
 async function updateStatus(ctx, text) {
   try {
-    await ctx.telegram.editMessageText(text, currentRun.statusMessageId);
+    await ctx.telegram.editMessageText(text, currentRun.chatId, currentRun.statusMessageId);
   } catch (error) {
     if (!error.message.includes('message to edit not found')) {
       console.error(`[updateStatus] ${error.message}`);

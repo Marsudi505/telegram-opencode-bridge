@@ -140,3 +140,38 @@ test('runOpencode menaikkan SIGINT ke SIGKILL kalau proses mengabaikannya', asyn
   assert.equal(result.timedOut, true);
   assert.equal(result.signal, 'SIGKILL');
 });
+
+test('runOpencode menutup stdin agar opencode tidak menunggu EOF', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'bridge-stdin-'));
+  const script = join(dir, 'needs-stdin.sh');
+  writeFileSync(script, '#!/bin/sh\ncat > /dev/null\nexit 0\n');
+  chmodSync(script, 0o755);
+
+  const result = await runOpencode({
+    prompt: 'hi',
+    config: makeConfig({ opencodeBin: script, aiTimeoutMs: 5000 }),
+  });
+
+  assert.equal(result.timedOut, false, 'proses yang butuh EOF stdin tidak boleh menggantung');
+  assert.equal(result.code, 0);
+});
+
+test('runOpencode menyebutkan direktori kerja di dalam prompt', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'bridge-cwd-'));
+  const dump = join(dir, 'argv.txt');
+  const script = join(dir, 'dump.sh');
+  writeFileSync(script, `#!/bin/sh\nprintf '%s' "$2" > ${dump}\n`);
+  chmodSync(script, 0o755);
+
+  await runOpencode({
+    prompt: 'bikin file hello.txt',
+    config: makeConfig({ opencodeBin: script, repoPath: dir, aiTimeoutMs: 5000 }),
+  });
+
+  const sent = readFileSync(dump, 'utf8');
+  assert.match(
+    sent,
+    new RegExp(dir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+    `prompt harus menyebut direktori kerja, dapat: ${JSON.stringify(sent)}`,
+  );
+});

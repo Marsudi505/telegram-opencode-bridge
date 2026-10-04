@@ -101,9 +101,19 @@ test('pipelineGit membuat commit dan push dengan sukses', async () => {
 
 test('git() menandai timeout saat proses git menggantung', async () => {
   const dir = makeRepo();
-  const result = await git(['hash-object', '--stdin'], configFor(dir, { gitTimeoutMs: 1500 }));
-  assert.equal(result.timedOut, true);
-  assert.equal(result.code, null);
+  const shimDir = mkdtempSync(join(tmpdir(), 'bridge-hang-'));
+  const shim = join(shimDir, 'git');
+  writeFileSync(shim, "#!/bin/sh\nsleep 60\n");
+  chmodSync(shim, 0o755);
+  const realPath = process.env.PATH;
+  process.env.PATH = `${shimDir}:${realPath}`;
+  try {
+    const result = await git(['status'], configFor(dir, { gitTimeoutMs: 1500 }));
+    assert.equal(result.timedOut, true);
+    assert.equal(result.code, null);
+  } finally {
+    process.env.PATH = realPath;
+  }
 });
 
 test('git() menaikkan ke SIGKILL saat proses git mengabaikan SIGINT', async () => {

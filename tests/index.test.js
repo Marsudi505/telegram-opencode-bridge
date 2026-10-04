@@ -114,3 +114,32 @@ test('parseCommand menolak --force sendirian tanpa prompt', async () => {
   const { parseCommand } = await import('../index.js');
   assert.deepEqual(parseCommand('/ai --force'), { prompt: '', force: true });
 });
+
+test('updateStatus mengirim chat_id dan message_id agar edit tidak ditolak Telegram', async () => {
+  const dir = makeRepo();
+  const stubDir = mkdtempSync(join(tmpdir(), 'bridge-slow-'));
+  const stub = join(stubDir, 'slow.sh');
+  writeFileSync(stub, '#!/bin/sh\nsleep 1\n');
+  chmodSync(stub, 0o755);
+
+  process.env.BOT_TOKEN = '123:fake';
+  process.env.ALLOWED_USER_IDS = '1484782778';
+  process.env.REPO_PATH = dir;
+  process.env.OPENCODE_BIN = stub;
+  process.env.AI_TIMEOUT_MS = '5000';
+  process.env.PROGRESS_EVERY_MS = '50';
+
+  const { runAI } = await import('../index.js');
+  const calls = [];
+  const ctx = stubCtx('/ai hi');
+  ctx.telegram.editMessageText = async (...args) => { calls.push(args); };
+
+  await runAI(ctx, 'hi');
+
+  assert.ok(calls.length > 0, 'progress harus mengedit pesan status');
+  const forwarded = calls[0].slice(1);
+  assert.ok(
+    forwarded.includes(ctx.chat.id) && forwarded.includes(1),
+    `editMessageText harus menerima chat_id (${ctx.chat.id}) dan message_id (1), dapat: ${JSON.stringify(calls[0])}`,
+  );
+});

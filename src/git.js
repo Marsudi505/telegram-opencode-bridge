@@ -36,8 +36,17 @@ export function screenSensitiveFiles(files) {
   });
 }
 
+function withCwd(prompt, config) {
+  return [
+    `Kamu bekerja di direktori: ${config.repoPath}`,
+    'Selalu buat dan ubah file di direktori itu. Jangan menebak path lain.',
+    '',
+    prompt,
+  ].join('\n');
+}
+
 function buildArgs(prompt, config, sessionId) {
-  const args = ['run', prompt, '--auto', '--format', 'json'];
+  const args = ['run', withCwd(prompt, config), '--auto', '--format', 'json'];
   if (config.opencodeModel) args.push('--model', config.opencodeModel);
   if (config.opencodeAgent) args.push('--agent', config.opencodeAgent);
   if (sessionId) args.push('--session', sessionId);
@@ -99,6 +108,7 @@ export function runOpencode({ prompt, config, sessionId, signal }) {
       cwd: config.repoPath,
       shell: false,
       detached: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
     });
 
     let stdout = '';
@@ -146,7 +156,12 @@ export function runOpencode({ prompt, config, sessionId, signal }) {
 
 export function git(args, config) {
   return new Promise((resolve) => {
-    const child = spawn('git', args, { cwd: config.repoPath, shell: false, detached: true });
+    const child = spawn('git', args, {
+      cwd: config.repoPath,
+      shell: false,
+      detached: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
     let stdout = '';
     let stderr = '';
     let timedOut = false;
